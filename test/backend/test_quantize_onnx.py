@@ -82,6 +82,15 @@ class TestQuantizeOnnxCPU(unittest.TestCase):
       daccs = [u for u in tuple(prg.src[2].src) if u.op is Ops.DEFINE_REG]
       assert all(u.dtype.scalar() is dtypes.int for u in daccs)
 
+@unittest.skipIf(Device.DEFAULT != "METAL", "only tests for METAL")
+class TestQuantizeOnnxMetal(unittest.TestCase):
+  def test_qlinearconv_round(self):
+    from tinygrad.nn.onnx import onnx_ops
+    x = Tensor.empty(1, 1, 1, 1, dtype=dtypes.uint8)
+    zp = Tensor(0, dtype=dtypes.uint8)
+    out = onnx_ops["QLinearConv"](x, Tensor(0.5), zp, x, Tensor(0.25), zp, Tensor(0.125), zp, kernel_shape=[1, 1])
+    self.assertIn(Ops.ROUND, {u.op for u in out.uop.toposort()})
+
 @unittest.skipIf(Device.DEFAULT != "DSP", "only tests for DSP")
 class TestQuantizeOnnx(unittest.TestCase):
   def test_quant_128(self): self.test_quant(128)

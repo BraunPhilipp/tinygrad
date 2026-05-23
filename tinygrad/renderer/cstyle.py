@@ -365,7 +365,8 @@ class MetalRenderer(CStyleLanguage):
   type_map = {dtypes.bfloat16: "bfloat"}
 
   # precise::sin
-  code_for_op = {**CStyleLanguage.code_for_op, Ops.SIN: lambda x,dtype: f"precise::sin({x})"}
+  code_for_op = {**CStyleLanguage.code_for_op, Ops.SIN: lambda x,dtype: f"precise::sin({x})",
+                 Ops.ROUND: lambda x,dtype: f"rint({x})"}
 
   # upcast to float32 all the ops that don't support bfloat16
   extra_matcher = PatternMatcher([

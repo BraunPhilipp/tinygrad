@@ -872,7 +872,7 @@ class ElementwiseMixin(DTypeMixin, CreationMixin):
     print(Tensor([-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5]).round().numpy())
     ```
     """
-    return ((self > 0).eq((b := self.trunc() / 2.0).trunc().eq(b))).where((self - 0.5).ceil(), (self + 0.5).floor())
+    return self.alu(Ops.ROUND) if self.is_floating_point() else self
 
   def sign(self) -> Self:
     """

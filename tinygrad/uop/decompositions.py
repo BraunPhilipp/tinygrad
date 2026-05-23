@@ -452,6 +452,9 @@ def floormod_to_mod(a:UOp, b:UOp) -> UOp:
   # use where instead of mul to avoid being fused into MULACC (which int64 long-decomp doesn't handle)
   return r + (r.ne(0) & (a<0).ne(b<0)).where(b, b.const_like(0))
 
+def round_decomp(x:UOp) -> UOp:
+  return ((x > 0).eq((b := x.trunc() / 2.0).trunc().eq(b))).where((x-0.5).ceil(), (x+0.5).floor())
+
 powers_of_two: dict[int, int] = {2**i:i for i in range(64)}
 @functools.cache
 def get_late_rewrite_patterns(ops:tuple[Ops, ...], disable_fast_idiv:bool) -> PatternMatcher:
@@ -463,6 +466,7 @@ def get_late_rewrite_patterns(ops:tuple[Ops, ...], disable_fast_idiv:bool) -> Pa
   if Ops.THREEFRY not in ops: pat.append((UPat(Ops.THREEFRY, dtype=dtypes.uint64, src=(UPat.var("x"), UPat.var("key"))), threefry2x32))
   # MAX can be rewritten as CMPLT + WHERE (max function is annoying on many cstyle backends)
   if Ops.MAX not in ops and Ops.CMPLT in ops: pat.append((UPat(Ops.MAX, name="m"), lambda m: (m.src[0] < m.src[1]).where(m.src[1], m.src[0])))
+  if Ops.ROUND not in ops: pat.append((UPat(Ops.ROUND, dtype=dtypes.floats, src=(UPat.var("x"),)), round_decomp))
   if Ops.OR in ops: pat += [(UPat.var("x", dtypes.bool).logical_not()&UPat.var("y", dtypes.bool).logical_not(),
     lambda x,y: (x | y).logical_not())]
   # rewrite MUL/CDIV to SHL+SHR: x*(2**y) -> shl(x,y) and x//(2**y) -> shr(x,y)
