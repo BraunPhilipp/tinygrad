@@ -430,16 +430,23 @@ pm_simplify_valid = PatternMatcher([
 
 # this is symbolic 2.0
 REMOVE_FROM_SINK_LIKE = {Ops.UNROLL, Ops.NOOP, Ops.STACK, Ops.SINK}
+FOLDABLE_BINOPS = {Ops.ADD, Ops.SUB, Ops.MUL}
+
+def fold_where(cond:UOp, x:UOp, cond_true:bool) -> UOp:
+  if x.op is Ops.WHERE:
+    where_cond, true_branch, false_branch = x.src
+    if where_cond is cond: return true_branch if cond_true else false_branch
+  if x.op in FOLDABLE_BINOPS:
+    src = tuple(fold_where(cond, s, cond_true) for s in x.src)
+    return x.replace(src=src)
+  return x
+
 sym = symbolic+pm_simplify_valid+PatternMatcher([
   # reorder ALU/VECTORIZE
   (UPat(GroupOp.ALU, src=(UPat(Ops.STACK, src=UPat(name='x')), UPat(Ops.STACK, src=UPat(name='y'))), name='alu'),
    lambda x,y,alu: UOp(Ops.STACK, alu.dtype, (UOp(alu.op, alu.dtype.scalar(), (x,y)),)*alu.dtype.count)),
   # ** where **
-  # fold immediate nested condition
-  (UPat.var("cond").where(UPat.var("cond").where(UPat.var("a"), UPat.var("b")), UPat.var("f")), lambda cond,a,b,f: cond.where(a, f)),
-  (UPat.var("cond").where(UPat.var("t"), UPat.var("cond").where(UPat.var("a"), UPat.var("b"))), lambda cond,t,a,b: cond.where(t, b)),
-  (UPat.var("cond").where(UPat(GroupOp.Binary, name="alu", src=(UPat.var("cond").where(UPat.var("a"), UPat.var("b")), UPat.var("x"))), UPat.var("f")), lambda cond,alu,a,b,x,f: cond.where(a.alu(alu.op, x), f)),
-  (UPat.var("cond").where(UPat.var("t"), UPat(GroupOp.Binary, name="alu", src=(UPat.var("cond").where(UPat.var("a"), UPat.var("b")), UPat.var("x")))), lambda cond,t,alu,a,b,x: cond.where(t, b.alu(alu.op, x))),
+  (UPat.var("cond").where(UPat.var("t"), UPat.var("f")), lambda cond,t,f: cond.where(fold_where(cond, t, True), fold_where(cond, f, False))),
   # push cast to branches
   (UPat.var("s").where(UPat.var("a"), UPat.var("b")).cast().named("cast"), lambda s,a,b,cast: s.where(a.cast(cast.dtype), b.cast(cast.dtype))),
   # ** pow **
