@@ -2,6 +2,7 @@
 import unittest, pickle, functools, math
 import z3
 
+from tinygrad import Tensor
 from tinygrad.dtype import dtypes, ConstType, DType, Invalid
 from test.helpers import get_uops
 from tinygrad.uop.ops import UOp, Ops, graph_rewrite, sym_infer
@@ -974,8 +975,12 @@ class TestSymbolic(unittest.TestCase):
     # (a if ((s<5)&(s<6)) else b) -> (a if (s<5) else b)
     self.helper_test_variable(expr, 0, 3, "(s<5).where(a, b)")
 
-  @unittest.expectedFailure
-  def test_where_closure_folding(self):
+  def test_where_same_condition_direct_branches(self):
+    x, y, z = Tensor([-1.0]), Tensor([2.0]), Tensor([3.0])
+    out = (x < 0).where((x < 0).where(y, z), (x < 0).where(y+1, z+1))
+    self.assertIs(graph_rewrite(out.uop, sym), (x < 0).where(y, z+1).uop)
+
+  def test_where_same_condition_nested_expression(self):
     # cond.where(t, f) where f contains cond.where(a, b) should fold the inner where to b in false branch
     x = Variable("x", 0, 10)
     cond = x < 5
